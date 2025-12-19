@@ -6,7 +6,6 @@ import os
 from datetime import datetime
 from flask import Flask, render_template_string, request, jsonify
 import threading
-import base64
 
 app = Flask(__name__)
 
@@ -33,9 +32,8 @@ class AITailorSystem:
         self.current_measurements = None
         
     def calibrate_system(self, frame):
-        """Calibrate using face width - simplified version"""
+        """Calibrate using face width"""
         h, w, _ = frame.shape
-        # Assume average face is roughly 1/8th of frame width
         face_width_pixels = w / 8
         average_face_width_cm = 15.5
         self.pixel_to_cm_ratio = average_face_width_cm / face_width_pixels
@@ -148,8 +146,11 @@ class AITailorSystem:
         self.measurements_data[user_name].append(measurement_record)
         
         filename = f"measurements_{user_name}.json"
-        with open(filename, 'w') as f:
-            json.dump(self.measurements_data[user_name], f, indent=4)
+        try:
+            with open(filename, 'w') as f:
+                json.dump(self.measurements_data[user_name], f, indent=4)
+        except Exception as e:
+            print(f"Error saving file: {e}")
         
         return True
 
@@ -194,8 +195,25 @@ HTML_TEMPLATE = '''
         .subtitle {
             text-align: center;
             color: #666;
-            margin-bottom: 30px;
+            margin-bottom: 15px;
             font-size: 0.9em;
+        }
+        
+        .monetize-banner {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .monetize-banner a {
+            color: white;
+            text-decoration: underline;
+            font-weight: bold;
         }
         
         .video-container {
@@ -389,6 +407,10 @@ HTML_TEMPLATE = '''
         <h1>👕 AI Tailor</h1>
         <p class="subtitle">Automatic Body Measurement System</p>
         
+        <div class="monetize-banner">
+            💝 Support this project on <a href="https://patreon.com/yourname" target="_blank">Patreon</a> for exclusive features!
+        </div>
+        
         <div id="alert"></div>
         
         <div class="video-container">
@@ -429,7 +451,6 @@ HTML_TEMPLATE = '''
         let calibrated = false;
         let currentMeasurements = null;
         
-        // Start camera
         navigator.mediaDevices.getUserMedia({ 
             video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } 
         })
@@ -448,7 +469,8 @@ HTML_TEMPLATE = '''
                     calibrated = true;
                     document.getElementById('calibration-status').textContent = '✅ Calibrated';
                     showAlert('System calibrated successfully!', 'success');
-                });
+                })
+                .catch(err => showAlert('Error: ' + err, 'error'));
         }
         
         function measureNow() {
@@ -469,7 +491,8 @@ HTML_TEMPLATE = '''
                         document.getElementById('detection-status').textContent = '❌ No Body Detected';
                         showAlert('Could not detect body. Make sure your full body is visible.', 'error');
                     }
-                });
+                })
+                .catch(err => showAlert('Error: ' + err, 'error'));
         }
         
         function displayMeasurements(measurements) {
@@ -506,7 +529,8 @@ HTML_TEMPLATE = '''
             .then(res => res.json())
             .then(data => {
                 showAlert(`Measurements saved for ${username}!`, 'success');
-            });
+            })
+            .catch(err => showAlert('Error: ' + err, 'error'));
         }
         
         function stopCamera() {
@@ -537,35 +561,44 @@ def index():
 
 @app.route('/calibrate')
 def calibrate():
-    cap = cv2.VideoCapture(0)
-    ret, frame = cap.read()
-    if ret:
-        tailor_system.calibrate_system(frame)
+    try:
+        cap = cv2.VideoCapture(0)
+        ret, frame = cap.read()
+        if ret:
+            tailor_system.calibrate_system(frame)
+            cap.release()
+            return jsonify({'success': True, 'message': 'Calibrated'})
         cap.release()
-        return jsonify({'success': True, 'message': 'Calibrated'})
-    cap.release()
+    except Exception as e:
+        print(f"Calibration error: {e}")
     return jsonify({'success': False})
 
 @app.route('/measure')
 def measure():
-    cap = cv2.VideoCapture(0)
-    ret, frame = cap.read()
-    if ret:
-        success, measurements = tailor_system.process_frame(frame)
+    try:
+        cap = cv2.VideoCapture(0)
+        ret, frame = cap.read()
+        if ret:
+            success, measurements = tailor_system.process_frame(frame)
+            cap.release()
+            if success and measurements:
+                return jsonify({'success': True, 'measurements': measurements})
         cap.release()
-        if success and measurements:
-            return jsonify({'success': True, 'measurements': measurements})
-    cap.release()
+    except Exception as e:
+        print(f"Measurement error: {e}")
     return jsonify({'success': False})
 
 @app.route('/save', methods=['POST'])
 def save():
-    data = request.json
-    tailor_system.save_measurements(data['user'], data['measurements'])
-    return jsonify({'success': True})
+    try:
+        data = request.json
+        tailor_system.save_measurements(data['user'], data['measurements'])
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Save error: {e}")
+        return jsonify({'success': False})
 
 if __name__ == '__main__':
-    print("🚀 AI Tailor System Starting...")
-    print("📱 Open your browser and go to: http://localhost:5000")
-    print("Press Ctrl+C to stop")
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    port = os.environ.get('PORT', 5000)
+    print(f"🚀 AI Tailor System Starting on port {port}...")
+    app.run(debug=False, host='0.0.0.0', port=int(port))
