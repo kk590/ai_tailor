@@ -408,7 +408,7 @@ HTML_TEMPLATE = '''
         <p class="subtitle">Automatic Body Measurement System</p>
         
         <div class="monetize-banner">
-            💝 Support this project on <a href="https://patreon.com/yourname" target="_blank">Patreon</a> for exclusive features!
+            💝 Support this project on <a href="https://www.patreon.com/cw/RackTheKing001" target="_blank">Patreon</a> for exclusive features!
         </div>
         
         <div id="alert"></div>
@@ -602,3 +602,4 @@ if __name__ == '__main__':
     port = os.environ.get('PORT', 5000)
     print(f"🚀 AI Tailor System Starting on port {port}...")
     app.run(debug=False, host='0.0.0.0', port=int(port))
+
